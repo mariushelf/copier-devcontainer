@@ -55,7 +55,10 @@ project:
 - A genuine live run means actually building the rendered devcontainer
   (`devcontainer up` / `docker compose`) where Docker is available — passing a
   render check does not prove the container builds. `make test` does this build
-  locally (skipped in CI, which has no Docker runner).
+  locally (skipped in CI, which has no Docker runner). The CI `devcontainer`
+  job covers it on PRs: it renders the template, `devcontainer up`s it, and
+  execs `claude --version` to prove the image builds, Claude Code is installed,
+  and commands run inside the container.
 - Keep the rendered tree generic: no vocabulary or hosts tied to any one
   project belong in the defaults.
 

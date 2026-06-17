@@ -1,11 +1,20 @@
 name: CI
 
-# Render-test the template on every push and PR. GitHub sets CI=true, so the
-# local-only Docker build stage in scripts/test-render.sh is skipped here.
+# `render` runs on every push and PR (GitHub sets CI=true, so the local-only
+# Docker build stage in scripts/test-render.sh is skipped there). The heavier
+# `devcontainer` job actually builds and boots the rendered container — it runs
+# on PRs (and manual dispatch) only, never on plain pushes to master.
 on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
+
+# The devcontainer build is expensive; a new push to a PR supersedes the
+# previous run, so cancel any in-flight run for the same ref.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   render:
@@ -17,3 +26,43 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - name: make test
         run: make test
+
+  # Build the rendered devcontainer with the devcontainer CLI and exec a
+  # command inside it. This is the live check `make test` deliberately skips in
+  # CI: it proves the image builds, Claude Code is installed, and commands can
+  # run in the container. It's slow (full image build + post-create's plugin
+  # installs and model warm-up), so it runs on PRs and manual dispatch only —
+  # not on every push. To gate merges on it, mark "devcontainer" a required
+  # status check in the branch-protection rule for master.
+  devcontainer:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Render the template
+        # An explicit target path makes project_name default to its basename,
+        # so --defaults needs no interactive answer.
+        run: uvx copier copy --defaults --trust . "$RUNNER_TEMP/rendered"
+
+      - name: Hand the container a GitHub token
+        # post-create.sh runs `gh auth setup-git` under `set -e`; with no auth,
+        # gh exits non-zero and sinks `devcontainer up` (waitFor blocks on the
+        # full lifecycle). The compose service loads .devcontainer/.env via
+        # env_file, so the ephemeral Actions token reaches gh inside the
+        # container exactly as real gh auth would.
+        run: echo "GH_TOKEN=${{ github.token }}" > "$RUNNER_TEMP/rendered/.devcontainer/.env"
+
+      - name: Build and start the devcontainer
+        # Full bring-up: runs post-create (plugins, MCP, model warm-up) and the
+        # post-start firewall, just like a real session.
+        run: npx -y @devcontainers/cli up --workspace-folder "$RUNNER_TEMP/rendered"
+
+      - name: Verify Claude is installed and commands run
+        # A successful exec of `claude --version` proves both claims at once:
+        # the binary is present AND commands execute inside the container.
+        run: |
+          npx -y @devcontainers/cli exec --workspace-folder "$RUNNER_TEMP/rendered" \
+            bash -lc 'set -euo pipefail; echo "claude at: $(command -v claude)"; claude --version; echo "exec OK"'
