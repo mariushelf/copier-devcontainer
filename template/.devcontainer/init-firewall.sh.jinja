@@ -112,12 +112,16 @@ mkdir -p /etc/dnsmasq.d
 # Kill any existing instance (container restart)
 if pidof dnsmasq >/dev/null 2>&1; then
     # killall is not available in this container; kill by PID and wait
+    # pidof may print several PIDs; the word-split is intentional (kill them all).
+    # shellcheck disable=SC2046
     kill $(pidof dnsmasq) 2>/dev/null || true
     for _ in $(seq 1 20); do
         pidof dnsmasq >/dev/null 2>&1 || break
         sleep 0.25
     done
     if pidof dnsmasq >/dev/null 2>&1; then
+        # pidof may print several PIDs; the word-split is intentional (kill them all).
+        # shellcheck disable=SC2046
         kill -9 $(pidof dnsmasq) 2>/dev/null || true
         sleep 0.5
     fi

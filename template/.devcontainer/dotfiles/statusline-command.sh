@@ -142,7 +142,8 @@ git_segment() {
     # Cache key: uid + sanitised repo root path
     local cache_key
     cache_key=$(printf '%s' "$cwd_root" | tr -cs 'a-zA-Z0-9' '_')
-    local cache_file="/tmp/claude-git-wt-$(id -u)-${cache_key}.txt"
+    local cache_file
+    cache_file="/tmp/claude-git-wt-$(id -u)-${cache_key}.txt"
     local now
     now=$(date +%s)
 
