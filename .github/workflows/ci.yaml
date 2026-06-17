@@ -1,9 +1,10 @@
 name: CI
 
-# `render` runs on every push and PR (GitHub sets CI=true, so the local-only
-# Docker build stage in scripts/test-render.sh is skipped there). The heavier
-# `devcontainer` job actually builds and boots the rendered container — it runs
-# on PRs (and manual dispatch) only, never on plain pushes to master.
+# Two suites, both driven by `make` so they run identically here and locally.
+# `render` runs the fast, Docker-free render checks on every push and PR. The
+# heavier `devcontainer` job builds and boots the rendered container (the full
+# real-session lifecycle) and runs the live checks — it runs on PRs and manual
+# dispatch only, never on plain pushes to master.
 on:
   push:
     branches: [master]
@@ -27,20 +28,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # uv provides `uvx copier` and `uv run --with pyyaml python`; no global
-      # copier install needed.
+      # uv provides `uvx copier` and `uv run --with pyyaml python`.
       - uses: astral-sh/setup-uv@v5
-      - name: make test
-        run: make test
+      - name: make test-render
+        run: make test-render
 
-  # Build the rendered devcontainer with the devcontainer CLI and exec a
-  # command inside it. This is the live check `make test` deliberately skips in
-  # CI: it proves the image builds, Claude Code is installed, commands can run
-  # in the container, and the post-start firewall actually blocks out-of-
-  # allowlist egress. It's slow (full image build + post-create's plugin
-  # installs and model warm-up), so it runs on PRs and manual dispatch only —
-  # not on every push. To gate merges on it, mark "devcontainer" a required
-  # status check in the branch-protection rule for master.
+  # Build and boot the rendered devcontainer (devcontainers/cli) and run the
+  # live checks via `make test-devcontainer` — the same script a developer runs
+  # locally. It proves the image builds, Claude Code is installed, commands run,
+  # and the post-start firewall blocks out-of-allowlist egress. Slow (full image
+  # build + post-create plugin installs and model warm-up), so it runs on PRs
+  # and manual dispatch only — not on every push. To gate merges on it, mark
+  # "devcontainer" a required status check in the branch-protection rule for
+  # master.
   devcontainer:
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
@@ -48,63 +48,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-
-      - name: Render the template
-        # An explicit target path makes project_name default to its basename,
-        # so --defaults needs no interactive answer.
-        run: uvx copier copy --defaults --trust . "$RUNNER_TEMP/rendered"
-
-      - name: Hand the container a GitHub token
-        # post-create.sh runs `gh auth setup-git` under `set -e`; with no auth,
-        # gh exits non-zero and sinks `devcontainer up` (waitFor blocks on the
-        # full lifecycle). The compose service loads .devcontainer/.env via
-        # env_file, so the ephemeral Actions token reaches gh inside the
-        # container exactly as real gh auth would.
-        run: echo "GH_TOKEN=${{ github.token }}" > "$RUNNER_TEMP/rendered/.devcontainer/.env"
-
-      - name: Build and start the devcontainer
-        # Full bring-up: runs post-create (plugins, MCP, model warm-up) and the
-        # post-start firewall, just like a real session.
-        run: npx -y @devcontainers/cli up --workspace-folder "$RUNNER_TEMP/rendered"
-
-      - name: Verify Claude is installed and commands run
-        # A successful exec of `claude --version` proves both claims at once:
-        # the binary is present AND commands execute inside the container.
-        run: |
-          npx -y @devcontainers/cli exec --workspace-folder "$RUNNER_TEMP/rendered" \
-            bash -lc 'set -euo pipefail; echo "claude at: $(command -v claude)"; claude --version; echo "exec OK"'
-
-      - name: Probe the firewall blocks out-of-allowlist egress
-        # Reuse the container started above — no rebuild, no re-apply. The
-        # firewall is already active: postStartCommand ran init-firewall.sh and
-        # `waitFor: postStartCommand` blocked `up` until it finished, so this
-        # step just execs curl. Three out-of-allowlist destinations (two domains
-        # + one bare IP) must be blocked; an allowed-host control must stay
-        # reachable, proving the firewall is selective rather than the container
-        # simply having no egress. Probes force IPv4 (-4): the allowlist is an
-        # IPv4 ipset and IPv6 egress is intentionally unfiltered (see
-        # init-firewall.sh "Known limitation"), so a v6-capable curl could
-        # otherwise slip past it. Blocked connections fail fast — the firewall
-        # REJECTs with icmp-port-unreachable — so --max-time is only a backstop.
-        run: |
-          npx -y @devcontainers/cli exec --workspace-folder "$RUNNER_TEMP/rendered" \
-            bash -lc '
-              set -uo pipefail
-              failed=0
-              probe_blocked() {
-                if curl -4 -sS --max-time 10 -o /dev/null "$1" 2>/dev/null; then
-                  echo "  [FAIL] $1 was reachable but the firewall should block it"; failed=1
-                else
-                  echo "  [PASS] $1 blocked as expected"
-                fi
-              }
-              probe_blocked https://example.com
-              probe_blocked https://www.wikipedia.org
-              probe_blocked https://1.1.1.1
-              if curl -4 -sS --max-time 20 -o /dev/null https://api.github.com 2>/dev/null; then
-                echo "  [PASS] allowed host api.github.com reachable"
-              else
-                echo "  [FAIL] allowed host api.github.com unreachable — firewall too strict or no egress at all"; failed=1
-              fi
-              exit "$failed"
-            '
+      - name: make test-devcontainer
+        # The script reads $GH_TOKEN and writes it into the rendered
+        # .devcontainer/.env so the container's post-create `gh auth setup-git`
+        # works (capped at contents:read by the permissions block above).
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: make test-devcontainer

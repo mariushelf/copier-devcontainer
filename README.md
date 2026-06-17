@@ -107,37 +107,41 @@ incidental.
 
 ## Development
 
-The template is tested by rendering it under several answer sets and asserting
-the output:
+The template has two test suites, both driven by `make` so they run identically
+locally and in CI:
 
 ```bash
-make test
+make test              # both suites
+make test-render       # fast, no Docker
+make test-devcontainer # builds & boots the rendered container
 ```
 
-This renders the defaults, the `gitignore_devcontainer=false` variant, a
-messy `project_name` (asserting the Compose name is a valid lowercased slug),
-and emptied/custom `allowed_domains` lists. For each render it checks that
-`project_name` and `allowed_domains` flow into the right files, the
+**`make test-render`** renders the defaults, the `gitignore_devcontainer=false`
+variant, a messy `project_name` (asserting the Compose name is a valid
+lowercased slug), and emptied/custom `allowed_domains` lists. For each render it
+checks that `project_name` and `allowed_domains` flow into the right files, the
 `.gitignore` matches the ignore choice, rendered shell passes `bash -n`,
 `devcontainer.json` is valid JSONC, `docker-compose.yml` is valid YAML, and no
-unrendered Jinja remains. It also runs a `copier update` round-trip.
+unrendered Jinja remains. It also runs a `copier update` round-trip. No Docker
+needed — a passing render does not prove the image builds, only that it renders
+correctly.
 
-Locally, `make test` additionally builds the rendered devcontainer image (needs
-Docker). In CI that build is skipped (`$CI` is set), so a render check still
-passes without a Docker runner — a passing render does not prove the image
-builds, only that it renders correctly.
+**`make test-devcontainer`** is the live check: it renders the template and uses
+the [devcontainer CLI](https://github.com/devcontainers/cli) to `up` the
+rendered container (full real-session lifecycle, including the post-start
+firewall), `exec`s `claude --version`, and probes that the firewall blocks
+out-of-allowlist egress while an allowed host stays reachable. It needs Docker,
+node/npx, and a GitHub token (`$GH_TOKEN`, or `gh auth login`). It's slow (full
+image build plus post-create plugin installs and model warm-up).
 
-CI runs on [GitHub Actions](.github/workflows/ci.yaml) in two jobs:
+CI runs on [GitHub Actions](.github/workflows/ci.yaml) in two jobs that call
+these same targets — no separate CI code path:
 
-- **`render`** — runs `make test` on every push and PR (no Docker needed).
-- **`devcontainer`** — on PRs (and manual dispatch) only, renders the template
-  and uses the [devcontainer CLI](https://github.com/devcontainers/cli) to
-  `up` the rendered container and `exec` `claude --version` inside it. This is
-  the live check `make test` skips in CI: it proves the image builds, Claude
-  Code is installed, and commands can run in the container. It's slow (full
-  image build plus the post-create plugin installs and model warm-up), which is
-  why it doesn't run on every push. To block merges on it, mark `devcontainer`
-  a required status check in the branch-protection rule for `master`.
+- **`render`** — runs `make test-render` on every push and PR.
+- **`devcontainer`** — runs `make test-devcontainer` on PRs (and manual
+  dispatch) only; its cost is why it doesn't run on every push. To block merges
+  on it, mark `devcontainer` a required status check in the branch-protection
+  rule for `master`.
 
 ## Requirements
 
