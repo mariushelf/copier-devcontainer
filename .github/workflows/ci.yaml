@@ -26,10 +26,16 @@ jobs:
   render:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       # uv provides `uvx copier` and `uv run --with pyyaml python`; no global
       # copier install needed.
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        # This template repo ships no uv.lock / requirements*.txt, so uv's
+        # default dependency-cache key never matches a file and never
+        # invalidates. Disable caching to silence that warning; there are no
+        # project dependencies worth caching here anyway.
+        with:
+          enable-cache: false
       - name: make test
         run: make test
 
@@ -45,8 +51,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        # This template repo ships no uv.lock / requirements*.txt, so uv's
+        # default dependency-cache key never matches a file and never
+        # invalidates. Disable caching to silence that warning; there are no
+        # project dependencies worth caching here anyway.
+        with:
+          enable-cache: false
 
       - name: Render the template
         # An explicit target path makes project_name default to its basename,
