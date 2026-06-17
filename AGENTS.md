@@ -43,17 +43,19 @@ project:
 ## Working on the template
 
 - **Render before claiming it works.** Unit-style checks aren't enough for a
-  template — generate it and inspect the output:
+  template — generate it and inspect the output. `make test` automates this
+  across several answer sets (spaces/uppercase in `project_name`, emptied and
+  custom `allowed_domains`, both values of `gitignore_devcontainer`), asserting
+  the answers flow into the right files, rendered shell passes `bash -n`,
+  JSON/YAML parse, and no unrendered Jinja remains — run it after any template
+  change. To eyeball a single render by hand:
   ```bash
   uvx copier copy --defaults --trust . /tmp/render-check
   ```
-  Try non-default answers too (spaces/uppercase in `project_name`, an emptied
-  or single-entry `allowed_domains`, both values of
-  `gitignore_devcontainer`). Confirm rendered shell scripts pass `bash -n`,
-  rendered JSON/YAML parse, and the container name is substituted everywhere.
 - A genuine live run means actually building the rendered devcontainer
   (`devcontainer up` / `docker compose`) where Docker is available — passing a
-  render check does not prove the container builds.
+  render check does not prove the container builds. `make test` does this build
+  locally (skipped in CI, which has no Docker runner).
 - Keep the rendered tree generic: no vocabulary or hosts tied to any one
   project belong in the defaults.
 

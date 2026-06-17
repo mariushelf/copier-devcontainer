@@ -105,6 +105,29 @@ incidental.
    is an accepted trade-off for per-developer setup. Choose
    `gitignore_devcontainer: false` if you want robust team-shared updates.
 
+## Development
+
+The template is tested by rendering it under several answer sets and asserting
+the output:
+
+```bash
+make test
+```
+
+This renders the defaults, the `gitignore_devcontainer=false` variant, a
+messy `project_name` (asserting the Compose name is a valid lowercased slug),
+and emptied/custom `allowed_domains` lists. For each render it checks that
+`project_name` and `allowed_domains` flow into the right files, the
+`.gitignore` matches the ignore choice, rendered shell passes `bash -n`,
+`devcontainer.json` is valid JSONC, `docker-compose.yml` is valid YAML, and no
+unrendered Jinja remains. It also runs a `copier update` round-trip.
+
+Locally, `make test` additionally builds the rendered devcontainer image (needs
+Docker). In CI that build is skipped (`$CI` is set), so a render check still
+passes without a Docker runner — a passing render does not prove the image
+builds, only that it renders correctly. The suite runs on every push and PR via
+[GitHub Actions](.github/workflows/ci.yaml).
+
 ## Requirements
 
 - [uv](https://github.com/astral-sh/uv) (to run `uvx copier`) or Copier
