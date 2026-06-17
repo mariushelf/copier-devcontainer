@@ -1,0 +1,11 @@
+{% if gitignore_devcontainer -%}
+# This devcontainer is per-developer setup, kept out of version control.
+# `*` ignores the entire folder — including this file and the Copier answers
+# file — so injecting the devcontainer changes nothing tracked in the repo.
+*
+{%- else -%}
+# Container secrets must never be committed. The rest of the devcontainer is
+# tracked so the team shares one configuration (and `copier update` has a
+# committed baseline to merge against).
+.env
+{%- endif %}

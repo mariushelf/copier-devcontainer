@@ -1,0 +1,72 @@
+# Copier configuration for the devcontainer template.
+# Docs: https://copier.readthedocs.io/
+
+# Only the files under template/ are rendered into the destination project.
+_subdirectory: template
+
+# Render ONLY files with a .jinja suffix through Jinja; copy everything else
+# (shell scripts, the large .p10k.zsh, dotfiles) byte-for-byte. This avoids
+# Jinja tripping over brace-heavy content in copied files.
+_templates_suffix: .jinja
+
+# Record answers in a dedicated file inside .devcontainer/ rather than the
+# default .copier-answers.yml at the repo root. This lets the devcontainer be
+# applied alongside other Copier templates in the same project without their
+# answer files colliding, and keeps the host repo root clean. When the
+# devcontainer is git-ignored (see gitignore_devcontainer), this file is
+# ignored too but stays on disk so `copier update` can still read it.
+_answers_file: .devcontainer/.copier-answers.devcontainer.yml
+
+# ── Questions ─────────────────────────────────────────────────────────
+
+project_name:
+  type: str
+  help: >-
+    Name for the devcontainer (used as its display name and, slugified, as the
+    Docker Compose project name).
+  # Default to the basename of the destination directory, so applying to an
+  # existing repo needs no manual entry. This resolves when the destination is
+  # an absolute/explicit path (the README recommends `"$(pwd)"`); when copier is
+  # invoked as bare ".", dst_path.name is empty and the validator below forces a
+  # value (interactively you just type it; non-interactively pass -d project_name=).
+  default: "{{ _copier_conf.dst_path.name }}"
+  validator: >-
+    {% if not project_name %}project_name must not be empty — run copier with an
+    explicit target path (e.g. "$(pwd)") or pass -d project_name=...{% endif %}
+
+allowed_domains:
+  type: yaml
+  multiline: true
+  help: >-
+    Domains the container firewall permits outbound HTTPS to (everything else
+    is denied). Remove any you don't want; add project-specific ones (APIs,
+    package mirrors, docs sites). Removing api.anthropic.com / platform.claude.com
+    breaks Claude Code; removing github.com breaks git push / gh.
+  default:
+    - api.anthropic.com
+    - claude.ai
+    - platform.claude.com
+    - statsig.anthropic.com
+    - statsig.com
+    - mcp.context7.com
+    - context7.com
+    - github.com
+    - api.github.com
+    - objects.githubusercontent.com
+    - pypi.org
+    - files.pythonhosted.org
+    - registry.npmjs.org
+    - huggingface.co
+    - cdn-lfs.huggingface.co
+    - cdn-lfs-us-1.huggingface.co
+    - xethub.hf.co
+
+gitignore_devcontainer:
+  type: bool
+  help: >-
+    Keep the devcontainer out of version control (treat it as per-developer
+    setup)? If yes, a .devcontainer/.gitignore is added that ignores the whole
+    folder — including itself and the Copier answers file — so nothing tracked
+    in the host repo changes. If no, the devcontainer is committed (only .env
+    stays ignored).
+  default: true
