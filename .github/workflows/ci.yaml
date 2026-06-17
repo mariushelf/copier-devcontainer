@@ -1,4 +1,4 @@
-name: test
+name: CI
 
 # Render-test the template on every push and PR. GitHub sets CI=true, so the
 # local-only Docker build stage in scripts/test-render.sh is skipped here.

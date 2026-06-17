@@ -126,7 +126,7 @@ Locally, `make test` additionally builds the rendered devcontainer image (needs
 Docker). In CI that build is skipped (`$CI` is set), so a render check still
 passes without a Docker runner — a passing render does not prove the image
 builds, only that it renders correctly. The suite runs on every push and PR via
-[GitHub Actions](.github/workflows/test.yml).
+[GitHub Actions](.github/workflows/ci.yaml).
 
 ## Requirements
 
