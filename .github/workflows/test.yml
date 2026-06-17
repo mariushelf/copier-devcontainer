@@ -1,0 +1,19 @@
+name: test
+
+# Render-test the template on every push and PR. GitHub sets CI=true, so the
+# local-only Docker build stage in scripts/test-render.sh is skipped here.
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # uv provides `uvx copier` and `uv run --with pyyaml python`; no global
+      # copier install needed.
+      - uses: astral-sh/setup-uv@v5
+      - name: make test
+        run: make test
