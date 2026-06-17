@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
 # Render the template under several answer sets and assert the output is
-# correct. This is the template's test suite: there is no application code, so
-# "does it work" means "does it render correctly".
+# correct. This is the template's *render* test suite — it exercises Copier
+# output only: no Docker, no container bring-up. The live container checks
+# (build, Claude, firewall) live in scripts/test-devcontainer.sh.
 #
 # Stages:
 #   1. Render each answer set, run scripts/check_render.py against it.
 #   2. `copier update` round-trip smoke test (proves the answers file lets an
 #      already-rendered project pull a later template version).
-#   3. Docker build of the rendered devcontainer — LOCAL ONLY. Skipped when
-#      $CI is set (GitHub runners set CI=true) or Docker is unavailable, so CI
-#      runs stages 1-2 and a local `make test` additionally runs stage 3.
 #
-# Requires `uv` (provides `uvx copier` and `uv run --with pyyaml python`).
+# Runs identically everywhere — there is no CI/local branching here. Requires
+# `uv` (provides `uvx copier` and `uv run --with pyyaml python`).
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -101,20 +100,6 @@ if find "$PROJ" -name '*.rej' | grep -q .; then
   echo "  [FAIL] update produced .rej conflict files"; FAILED=1
 else
   echo "  [PASS] update produced no .rej conflict files"
-fi
-
-echo ""
-echo "##### Stage 3: docker build of rendered devcontainer (local only) #####"
-if [[ -n "${CI:-}" ]]; then
-  echo "  [SKIP] \$CI is set — docker build is a local-only check"
-elif ! docker info >/dev/null 2>&1; then
-  echo "  [SKIP] Docker not available"
-else
-  if docker compose -f "$WORK/defaults/.devcontainer/docker-compose.yml" build; then
-    echo "  [PASS] rendered devcontainer image builds"
-  else
-    echo "  [FAIL] rendered devcontainer image failed to build"; FAILED=1
-  fi
 fi
 
 echo ""
