@@ -105,6 +105,29 @@ incidental.
    is an accepted trade-off for per-developer setup. Choose
    `gitignore_devcontainer: false` if you want robust team-shared updates.
 
+8. **Project setup lives in two developer-owned hook scripts, not the
+   template.** Anything project-specific — extra tools, Claude Code plugins, MCP
+   servers, first-run steps — goes in one of two scripts the template renders
+   once and then never overwrites (`_skip_if_exists`), so they are yours to edit
+   and a `copier update` pulls wiring improvements *around* them without
+   clobbering their contents:
+
+   - **`.devcontainer/custom-build.sh`** runs at **image-build time** (the last
+     `RUN`, as the `dev` user) for things worth baking into a cached layer:
+     extra CLIs, language servers, the binaries your plugins expect on `PATH`.
+     It is last because it churns most and Docker only rebuilds layers *after*
+     the first change; `uv tool install` lands on Claude's `PATH`, while
+     root-only system packages stay in the Dockerfile's apt block.
+   - **`.devcontainer/custom-post-create.sh`** runs at **container-create time**
+     (invoked by `post-create.sh`) for steps that need the running container —
+     above all Claude Code plugins / MCP servers, which live in the `~/.claude`
+     runtime volume that does not exist at build time.
+
+   A deliberate non-goal: the template does *not* resolve or manage these for
+   you (no manifest-to-installer machinery, no JSON plugin manifest). Direct
+   `uv` / `claude` commands in a script you own are simpler and more transparent
+   than reinventing apt/uv/npm behind a leakier interface.
+
 ## Development
 
 The template has two test suites, both driven by `make` so they run identically

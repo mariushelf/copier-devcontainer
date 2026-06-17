@@ -17,6 +17,16 @@ _templates_suffix: .jinja
 # ignored too but stays on disk so `copier update` can still read it.
 _answers_file: .devcontainer/.copier-answers.devcontainer.yml
 
+# The two custom-*.sh hooks are rendered once as a starting point and then
+# OWNED BY THE DEVELOPER: custom-build.sh (image build) bakes in project tools,
+# custom-post-create.sh (container create) installs Claude plugins/MCP servers
+# and any other first-run steps. Listing them here means `copier update` leaves
+# existing copies untouched, so new template versions can improve the wiring
+# around them without clobbering the project-specific contents inside them.
+_skip_if_exists:
+  - .devcontainer/custom-build.sh
+  - .devcontainer/custom-post-create.sh
+
 # ── Questions ─────────────────────────────────────────────────────────
 
 project_name:
