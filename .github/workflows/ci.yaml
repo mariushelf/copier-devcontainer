@@ -10,6 +10,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least privilege: every job here only reads the repo. The devcontainer job
+# hands github.token to PR-controlled container code, so capping the token at
+# read keeps that exposure harmless even if the repo default is read/write.
+permissions:
+  contents: read
+
 # The devcontainer build is expensive; a new push to a PR supersedes the
 # previous run, so cancel any in-flight run for the same ref.
 concurrency:
