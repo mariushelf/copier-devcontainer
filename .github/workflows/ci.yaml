@@ -1,10 +1,10 @@
 name: CI
 
-# Two suites, both driven by `make` so they run identically here and locally.
-# `render` runs the fast, Docker-free render checks on every push and PR. The
-# heavier `devcontainer` job builds and boots the rendered container (the full
-# real-session lifecycle) and runs the live checks — it runs on PRs and manual
-# dispatch only, never on plain pushes to master.
+# All jobs are driven by `make` so they run identically here and locally.
+# `shellcheck` and `render` are fast and Docker-free and run on every push and
+# PR. The heavier `devcontainer` job builds and boots the rendered container
+# (the full real-session lifecycle) and runs the live checks — it runs on PRs
+# and manual dispatch only, never on plain pushes to master.
 on:
   push:
     branches: [master]
@@ -38,6 +38,22 @@ jobs:
           enable-cache: false
       - name: make test-render
         run: make test-render
+
+  # ShellCheck every shell script — the harness sources and the rendered
+  # devcontainer scripts (init-firewall.sh is templated, so it is rendered
+  # first). Fast and Docker-free; catches the runtime bugs `bash -n` cannot.
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      # uv provides `uvx copier` and the pinned ShellCheck via shellcheck-py.
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        # No uv.lock / requirements*.txt here, so the cache key never matches;
+        # disable caching to silence the warning (nothing worth caching anyway).
+        with:
+          enable-cache: false
+      - name: make shellcheck
+        run: make shellcheck
 
   # Build and boot the rendered devcontainer (devcontainers/cli) and run the
   # live checks via `make test-devcontainer` — the same script a developer runs
