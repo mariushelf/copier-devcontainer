@@ -8,15 +8,26 @@
 #   2. `copier update` round-trip smoke test (proves the answers file lets an
 #      already-rendered project pull a later template version).
 #   3. Docker build of the rendered devcontainer — LOCAL ONLY. Skipped when
-#      $CI is set (GitHub runners set CI=true) or Docker is unavailable, so CI
-#      runs stages 1-2 and a local `make test` additionally runs stage 3.
+#      $CI is set (GitHub runners set CI=true) or Docker is unavailable.
+#   4. Firewall enforcement — LOCAL ONLY. Start the built container, apply its
+#      default-deny firewall, and assert out-of-allowlist destinations are
+#      blocked (with an allowed-host control). Gated like stage 3.
+#
+# CI runs stages 1-2; a local `make test` additionally runs stages 3-4.
 #
 # Requires `uv` (provides `uvx copier` and `uv run --with pyyaml python`).
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+# Set once the firewall-probe container is up so cleanup can tear it down (and
+# its named volumes) even if a probe aborts the script under `set -e`.
+FW_COMPOSE_FILE=""
+cleanup() {
+  [[ -n "$FW_COMPOSE_FILE" ]] && docker compose -f "$FW_COMPOSE_FILE" down -v >/dev/null 2>&1 || true
+  rm -rf "$WORK"
+}
+trap cleanup EXIT
 
 # copier update commits to a throwaway git repo; give it an identity that does
 # not depend on the host's git config.
@@ -26,6 +37,7 @@ export GIT_COMMITTER_NAME="render-test" GIT_COMMITTER_EMAIL="render-test@example
 PY=(uv run --quiet --with pyyaml python)
 COPIER=(uvx copier)
 FAILED=0
+BUILT=0  # set in stage 3 once the image builds; gates the stage 4 firewall probe
 
 # render <out-subdir> <project_name> <allowed_domains_json|-> <gitignore> [extra -d args...]
 # Writes a spec file and runs the checker. allowed_domains "-" means "use the
@@ -111,9 +123,66 @@ elif ! docker info >/dev/null 2>&1; then
   echo "  [SKIP] Docker not available"
 else
   if docker compose -f "$WORK/defaults/.devcontainer/docker-compose.yml" build; then
-    echo "  [PASS] rendered devcontainer image builds"
+    echo "  [PASS] rendered devcontainer image builds"; BUILT=1
   else
     echo "  [FAIL] rendered devcontainer image failed to build"; FAILED=1
+  fi
+fi
+
+echo ""
+echo "##### Stage 4: firewall enforcement (local only) #####"
+# Bring the rendered devcontainer up, apply its default-deny firewall, and
+# assert that out-of-allowlist destinations are actually blocked. Gated like
+# stage 3: needs Docker and a successfully built image, so it is skipped in CI.
+#
+# All probes force IPv4 (-4): the firewall is an IPv4 ipset/iptables allowlist
+# and IPv6 egress is intentionally unfiltered (see init-firewall.sh "Known
+# limitation"), so a v6-capable curl could otherwise slip past it and make a
+# blocked target look reachable.
+if [[ -n "${CI:-}" ]]; then
+  echo "  [SKIP] \$CI is set — firewall probe is a local-only check"
+elif [[ "$BUILT" -ne 1 ]]; then
+  echo "  [SKIP] image not built (see stage 3) — nothing to probe"
+else
+  COMPOSE=(docker compose -f "$WORK/defaults/.devcontainer/docker-compose.yml")
+  if ! "${COMPOSE[@]}" up -d >/dev/null 2>&1; then
+    echo "  [FAIL] could not start the devcontainer for firewall probing"; FAILED=1
+  else
+    FW_COMPOSE_FILE="$WORK/defaults/.devcontainer/docker-compose.yml"
+    # Apply the firewall (the dev user has a NOPASSWD sudoers entry for exactly
+    # this path; the container carries NET_ADMIN/NET_RAW).
+    if ! "${COMPOSE[@]}" exec -T dev sudo /usr/local/bin/init-firewall.sh \
+         >"$WORK/firewall.log" 2>&1; then
+      echo "  [FAIL] init-firewall.sh did not run cleanly:"
+      sed 's/^/      /' "$WORK/firewall.log"; FAILED=1
+    else
+      # probe_blocked <url-or-ip>: a blocked destination makes curl exit
+      # non-zero — the firewall REJECTs with icmp-port-unreachable, so this
+      # fails fast (connection refused) rather than hanging to --max-time.
+      probe_blocked() {
+        local target="$1"
+        if "${COMPOSE[@]}" exec -T dev curl -4 -sS --max-time 10 -o /dev/null "$target" 2>/dev/null; then
+          echo "  [FAIL] $target was reachable but the firewall should block it"; FAILED=1
+        else
+          echo "  [PASS] $target blocked as expected"
+        fi
+      }
+      # Three out-of-allowlist destinations: two domains and one bare IP.
+      probe_blocked "https://example.com"
+      probe_blocked "https://www.wikipedia.org"
+      probe_blocked "https://1.1.1.1"
+
+      # Control: an allowed host MUST stay reachable. Without it, all three
+      # "blocked" checks would also pass if the container simply had no egress
+      # at all — this proves the firewall is selective, not globally broken.
+      # api.github.com is pre-seeded into the ipset from published GitHub CIDRs,
+      # making it the most robust allowed target.
+      if "${COMPOSE[@]}" exec -T dev curl -4 -sS --max-time 20 -o /dev/null https://api.github.com 2>/dev/null; then
+        echo "  [PASS] allowed host api.github.com reachable"
+      else
+        echo "  [FAIL] allowed host api.github.com unreachable — firewall too strict or no egress at all"; FAILED=1
+      fi
+    fi
   fi
 fi
 
