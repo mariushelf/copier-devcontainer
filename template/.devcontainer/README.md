@@ -123,14 +123,15 @@ for each of them.
   docker-compose.yml         # Service definitions + volume mounts
   Dockerfile                 # Image layers: system pkgs, uv, Python, zsh, Claude
   init-firewall.sh           # Default-deny egress firewall (runs on every start)
-  claude-setup.json          # Declarative Claude Code plugin/MCP config
+  custom-build.sh            # ★ YOURS: build-time hook — bake in extra tools (last RUN)
+  custom-post-create.sh      # ★ YOURS: create-time hook — install Claude plugins/MCP, first-run steps
   HOWTOS.md                  # How-tos: re-apply firewall rules, rotate GitHub token
   dotfiles/
     .zshrc                   # Oh My Zsh config (Powerlevel10k theme)
     .p10k.zsh                # Powerlevel10k prompt configuration
     statusline-command.sh    # Claude Code status line script (copied into ~/.claude on create)
   scripts/
-    post-create.sh           # First-run setup (uv sync, pre-commit, Claude plugins, status line)
+    post-create.sh           # First-run setup (uv sync, pre-commit, runs custom-post-create.sh, status line)
     fix-volume-ownership.sh  # Fixes root-owned volume mount points
   bin/                       # Host-side convenience wrappers (add to PATH or invoke directly)
     dcc                      # Run Claude Code with --dangerously-skip-permissions in the devcontainer
@@ -143,16 +144,18 @@ for each of them.
 
 1. **Build** (`Dockerfile`): Installs system packages, uv, Python, zsh/
    oh-my-zsh, GitHub CLI, Claude Code, and pre-commit. Creates a non-root
-   `dev` user (UID 1000) with scoped sudo for the firewall script only.
+   `dev` user (UID 1000) with scoped sudo for the firewall script only. The
+   final build step runs your **`custom-build.sh`** (as `dev`) to bake in any
+   project-specific tools — see [Customization hooks](#customization-hooks).
 
 2. **Start** (`postStartCommand`): Runs the firewall script as root via
    sudo. This runs on every container start, not just the first time.
 
 3. **Create** (`postCreateCommand`): Runs once after the container is first
-   created. Installs Python dependencies (`uv sync`), sets up pre-commit
-   hooks, configures Claude Code plugins/MCP servers from `claude-setup.json`,
-   and provisions the Claude Code status line by copying
-   `dotfiles/statusline-command.sh` into `~/.claude/` and merging the
+   created. Installs Python dependencies (`uv sync`), sets up pre-commit hooks,
+   runs your **`custom-post-create.sh`** (Claude Code plugins/MCP servers and
+   any other first-run steps), and provisions the Claude Code status line by
+   copying `dotfiles/statusline-command.sh` into `~/.claude/` and merging the
    `statusLine` key into `~/.claude/settings.json`.
 
 ### Volume strategy
@@ -213,34 +216,48 @@ for the threat model this container targets but is not exfiltration-proof.
 Deferred hardenings are tracked in
 [Future work › Firewall hardening](FUTURE_WORK.md#firewall-hardening).
 
-### Claude Code setup
+### Customization hooks
 
-`claude-setup.json` declares plugins and MCP servers to install inside the
-container. This runs during `postCreateCommand` and is non-fatal — failures
-don't block the dev environment.
+Project-specific setup — extra tools, Claude Code plugins, MCP servers, any
+first-run steps — lives in **two scripts you own**. The template writes them
+once with sensible defaults and then **never overwrites them**, so your edits
+survive `copier update` (it pulls improvements to the surrounding wiring, not to
+these files). Edit them directly with plain `uv` / `claude` shell commands;
+there is no manifest format to learn.
 
-```json
-{
-  "marketplaces": [
-    "anthropics/claude-plugins-official",
-    "..."
-  ],
-  "plugins": [
-    "superpowers",
-    "..."
-  ],
-  "mcp_servers": [
-    {
-      "name": "context7",
-      "command": "npx",
-      "args": [
-        "-y",
-        "@upstash/context7-mcp@latest"
-      ]
-    }
-  ]
-}
-```
+| Hook | When it runs | Use it for |
+|------|--------------|------------|
+| **`custom-build.sh`** | Image **build** — the last `RUN`, as the `dev` user | Tools worth baking into a cached image layer: extra CLIs, language servers, and the binaries your plugins expect on `PATH` (e.g. `uv tool install ast-grep-cli`). |
+| **`custom-post-create.sh`** | Container **create** — invoked by `post-create.sh` (non-fatal) | Steps that need the running container: above all `claude plugin install` / `claude mcp add`, plus model warm-ups and other one-time setup. |
+
+**Why two scripts, and which to use:**
+
+- **Claude Code plugins and MCP servers go in `custom-post-create.sh`, not
+  `custom-build.sh`.** Plugins live under `$CLAUDE_CONFIG_DIR` (`~/.claude`),
+  which is a **runtime volume that does not exist at image-build time** — so a
+  plugin installed during the build would be shadowed by the volume on the next
+  rebuild and silently lost. Installing them at create time, after the volume is
+  mounted, is the only reliable place.
+- **`custom-build.sh` is the last build step on purpose:** it changes more often
+  than the system/Python/Claude layers above it, and Docker only rebuilds layers
+  *after* the first change — so keeping it last keeps those expensive layers
+  cached. It runs as `dev`, so `uv tool install` lands on Claude's `PATH`.
+  **System packages that need root (`apt`) don't go here** — this user has no
+  general sudo; add them to the system-packages block near the top of the
+  `Dockerfile`.
+- **If a plugin needs a CLI on `PATH`** (e.g. `pyright` for `pyright-lsp`),
+  install the plugin in `custom-post-create.sh` *and* its binary in
+  `custom-build.sh`. Keep the two in sync.
+
+Both scripts are best-effort at create time (`custom-post-create.sh` is run
+non-fatally, so a flaky plugin install never blocks your dev environment) and
+should be kept idempotent, since they re-run whenever the container is recreated
+or rebuilt.
+
+[How-tos](HOWTOS.md#customizing-the-image-and-claude-plugins) covers applying an
+edit to a running or rebuilt container — including the gotcha that *removing* a
+plugin from `custom-post-create.sh` does not uninstall it, because plugins
+persist in the `~/.claude` volume.
 
 ### GitHub token
 

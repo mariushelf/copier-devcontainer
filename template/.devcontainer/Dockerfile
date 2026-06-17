@@ -89,20 +89,22 @@ ENV PATH="/home/${USERNAME}/.local/bin:${PATH}"
 # ── pre-commit (project dev tool, installed via uv) ─────────────────
 RUN uv tool install pre-commit
 
-# ── Claude Code plugin host-dependencies ────────────────────────────
-# Binaries that plugins declared in .devcontainer/claude-setup.json expect
-# on PATH. Keep this block in sync with that file: adding a plugin whose
-# binary isn't already here means adding it below. post-create.sh verifies
-# presence at create time and warns loudly on drift, so a missing entry
-# fails visibly instead of silently.
-#   ast-grep-cli → `ast-grep` plugin   (expects `ast-grep`/`sg` on PATH)
-#   pyright      → `pyright-lsp` plugin (expects `pyright` on PATH)
-#   memsearch    → `memsearch` plugin — OPTIONAL: the plugin self-bootstraps
-#                  via `uvx --from memsearch[onnx]`; baked here only so the
-#                  first session is fast, deterministic, and offline-safe.
-# (The context7 MCP self-installs via `npx -y`; it needs only node — no entry.)
-RUN uv tool install ast-grep-cli
-RUN uv tool install pyright
-RUN uv tool install memsearch[onnx]
+# ── Developer-owned build-time hook (last layer) ───────────────────
+# custom-build.sh is where you bake project-specific tools into the image —
+# extra CLIs, language servers, and the binaries your Claude plugins expect on
+# PATH. The Copier template renders it ONCE and then leaves it alone
+# (`_skip_if_exists`), so it is yours to edit and a `copier update` will not
+# clobber it. (Claude plugins themselves install in custom-post-create.sh, not
+# here — they live in a runtime volume absent at build time.)
+#
+# Deliberately the last RUN: this hook churns more often than anything above,
+# and Docker invalidates every layer after the first change — so keeping it
+# last leaves the expensive system/Python/Claude layers cached when only the
+# hook changes. The COPY sits immediately above the RUN (not with the earlier
+# bulk COPYs) for the same reason: editing the script then invalidates just
+# this COPY+RUN pair. It runs as ${USERNAME}, so `uv tool install` lands on the
+# dev user's PATH; root-only system packages belong in the apt block up top.
+COPY --chown=${USERNAME}:${USERNAME} custom-build.sh /tmp/custom-build.sh
+RUN bash /tmp/custom-build.sh
 
 WORKDIR /workspace
