@@ -125,8 +125,19 @@ unrendered Jinja remains. It also runs a `copier update` round-trip.
 Locally, `make test` additionally builds the rendered devcontainer image (needs
 Docker). In CI that build is skipped (`$CI` is set), so a render check still
 passes without a Docker runner — a passing render does not prove the image
-builds, only that it renders correctly. The suite runs on every push and PR via
-[GitHub Actions](.github/workflows/ci.yaml).
+builds, only that it renders correctly.
+
+CI runs on [GitHub Actions](.github/workflows/ci.yaml) in two jobs:
+
+- **`render`** — runs `make test` on every push and PR (no Docker needed).
+- **`devcontainer`** — on PRs (and manual dispatch) only, renders the template
+  and uses the [devcontainer CLI](https://github.com/devcontainers/cli) to
+  `up` the rendered container and `exec` `claude --version` inside it. This is
+  the live check `make test` skips in CI: it proves the image builds, Claude
+  Code is installed, and commands can run in the container. It's slow (full
+  image build plus the post-create plugin installs and model warm-up), which is
+  why it doesn't run on every push. To block merges on it, mark `devcontainer`
+  a required status check in the branch-protection rule for `master`.
 
 ## Requirements
 
