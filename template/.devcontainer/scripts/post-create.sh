@@ -7,7 +7,15 @@ sudo /usr/local/bin/fix-volume-ownership.sh
 
 echo "==> Configuring git to use HTTPS (host uses SSH, container uses HTTPS)..."
 git config --global url."https://github.com/".insteadOf "git@github.com:"
-gh auth setup-git
+# `gh auth setup-git` only works when gh has an authenticated GitHub host. That
+# is absent for non-GitHub projects, or when no token is mounted — and under
+# `set -e` its non-zero exit would abort the whole post-create. Guard it so the
+# convenience is best-effort, like the custom-post-create step below.
+if gh auth status >/dev/null 2>&1; then
+    gh auth setup-git
+else
+    echo "    gh not authenticated — skipping 'gh auth setup-git'. Run it later if you push to GitHub over HTTPS."
+fi
 
 echo "==> Installing Python dependencies..."
 cd /workspace
