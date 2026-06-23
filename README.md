@@ -1,5 +1,8 @@
 # copier-devcontainer
 
+[![CI](https://github.com/mariushelf/copier-devcontainer/actions/workflows/ci.yaml/badge.svg)](https://github.com/mariushelf/copier-devcontainer/actions/workflows/ci.yaml)
+[![Copier](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/copier-org/copier/master/img/badge/badge-grayscale-inverted-border-orange.json)](https://github.com/copier-org/copier)
+
 A [Copier](https://copier.readthedocs.io/) template that injects a fully
 configured **Python + Claude Code devcontainer** into an existing repository —
 uv, pre-commit, the GitHub CLI, a zsh/Powerlevel10k shell, a curated set of
