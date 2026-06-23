@@ -61,7 +61,8 @@ The rendered `.devcontainer/` is self-documenting:
 An `.envrc` ([direnv](https://direnv.net/)) is also written at the repo root; it
 puts the host-side helper scripts (`dcc` — launch Claude Code in the container,
 `dcexec`, `dcrebuild`, `dcdown`, `dczsh`) on your `PATH` and exports your UID/GID
-into the Compose build.
+into the Compose build. It is excluded from version control locally rather than
+committed — see *Design decisions* below.
 
 ## Design decisions
 
@@ -78,6 +79,14 @@ incidental.
    devcontainer changes **zero** tracked files in the host repo (no edit to the
    repo's root `.gitignore`). When false, the devcontainer is committed and only
    `.env` stays ignored, so secrets are never tracked either way.
+
+   The two artifacts the template drops at the repo *root* — the injected
+   `.envrc` and the `.memsearch` index the memsearch plugin builds at runtime —
+   are kept out of the way in the same spirit: `post-create.sh` adds them to the
+   repo's **local** `.git/info/exclude`, never the committed `.gitignore`, so
+   they don't clutter `git status` while still leaving every tracked file
+   untouched. Anything you have deliberately committed under those names is
+   detected and left alone.
 
 3. **Own answers file for multi-template coexistence.** Answers are recorded in
    `.devcontainer/.copier-answers.devcontainer.yml` (not the default

@@ -72,4 +72,33 @@ else
     echo "    No .pre-commit-config.yaml found — skipping pre-commit install."
 fi
 
+# ── Exclude per-developer artifacts from version control (locally) ───
+# This template injects an .envrc, and custom-post-create.sh installs the
+# memsearch plugin, which writes a local .memsearch index at runtime. Both are
+# per-developer artifacts, not project files. To preserve the template's
+# "injecting it changes zero tracked files" guarantee, list them in the repo's
+# LOCAL .git/info/exclude rather than its committed .gitignore. Anything already
+# tracked is left alone (a deliberate commit wins), existing entries are not
+# duplicated, and the exclude path is resolved via `git rev-parse` so this also
+# works inside linked worktrees — making it safe to re-run on every rebuild.
+echo "==> Excluding per-developer artifacts (.envrc, .memsearch) locally..."
+cd /workspace
+exclude_file="$(git rev-parse --git-path info/exclude 2>/dev/null || true)"
+if [ -n "$exclude_file" ]; then
+    mkdir -p "$(dirname "$exclude_file")"
+    for artifact in .envrc .memsearch; do
+        if [ -n "$(git ls-files -- "$artifact" 2>/dev/null)" ]; then
+            echo "    '$artifact' is tracked — leaving it under version control."
+            continue
+        fi
+        if [ -f "$exclude_file" ] && grep -qxF "$artifact" "$exclude_file"; then
+            continue
+        fi
+        printf '%s\n' "$artifact" >> "$exclude_file"
+        echo "    Locally excluded '$artifact'."
+    done
+else
+    echo "    /workspace is not a git repository — skipping local excludes."
+fi
+
 echo "==> Post-create setup complete."
