@@ -26,11 +26,14 @@ PY=(uv run --quiet --with pyyaml python)
 COPIER=(uvx copier)
 FAILED=0
 
-# render <out-subdir> <project_name> <allowed_domains_json|-> <gitignore> [extra -d args...]
+# render <out-subdir> <project_name> <allowed_domains_json|-> <gitignore> [browser|-]
 # Writes a spec file and runs the checker. allowed_domains "-" means "use the
-# template defaults" (the checker resolves them from copier.yml).
+# template defaults" (the checker resolves them from copier.yml). browser "-"
+# (the default) leaves install_headless_browser unset so the template default
+# applies; "true"/"false" force the answer and the checker asserts the
+# Dockerfile's browser block is present/absent accordingly.
 render() {
-  local sub="$1" pname="$2" domains="$3" gitignore="$4"; shift 4
+  local sub="$1" pname="$2" domains="$3" gitignore="$4" browser="${5:--}"
   local out="$WORK/$sub"
   echo ""
   echo "=== render: $sub ==="
@@ -38,12 +41,16 @@ render() {
   [[ -n "$pname" ]] && args+=(-d "project_name=$pname")
   [[ "$domains" != "-" ]] && args+=(-d "allowed_domains=$domains")
   args+=(-d "gitignore_devcontainer=$gitignore")
+  [[ "$browser" != "-" ]] && args+=(-d "install_headless_browser=$browser")
   "${COPIER[@]}" "${args[@]}" "$REPO_ROOT" "$out" >/dev/null
 
   # project_name "" means the defaults case: copier used dst_path.name == $sub.
   local expected_pname="${pname:-$sub}"
   local domains_field="$domains"
   [[ "$domains" == "-" ]] && domains_field="null"
+  # browser "-" -> null (don't assert the block either way for this render).
+  local browser_field="$browser"
+  [[ "$browser" == "-" ]] && browser_field="null"
 
   local spec="$WORK/$sub.spec.json"
   cat >"$spec" <<JSON
@@ -53,6 +60,7 @@ render() {
   "project_name": "$expected_pname",
   "allowed_domains": $domains_field,
   "gitignore_devcontainer": $gitignore,
+  "install_headless_browser": $browser_field,
   "copier_yml": "$REPO_ROOT/copier.yml",
   "template_dir": "$REPO_ROOT/template"
 }
@@ -72,6 +80,11 @@ render "messy-name" "My Cool Project 2!" "-" "true"
 render "no-domains" "" "[]" "true"
 # small custom allowed_domains
 render "custom-domains" "" '["example.com","api.example.com"]' "true"
+# headless browser on -> Dockerfile gains the gated Chromium block
+render "browser-on" "" "-" "true" "true"
+# headless browser explicitly off -> block absent (defaults already cover false,
+# but assert it explicitly so a flipped default can't pass silently)
+render "browser-off" "" "-" "true" "false"
 
 echo ""
 echo "##### Stage 2: copier update smoke test #####"

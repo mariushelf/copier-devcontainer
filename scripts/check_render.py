@@ -161,6 +161,18 @@ def main() -> int:
         f"got {hosts}, expected {allowed_domains}",
     )
 
+    # --- Dockerfile: headless-browser block present iff the answer is true ---
+    # Skipped (None) for renders that don't pin install_headless_browser.
+    install_browser = spec.get("install_headless_browser")
+    if install_browser is not None:
+        dockerfile = (root / ".devcontainer/Dockerfile").read_text()
+        has_block = "playwright install chromium" in dockerfile
+        c.check(
+            has_block == install_browser,
+            f"Dockerfile browser block present == {install_browser}",
+            f"present={has_block}",
+        )
+
     # --- .gitignore: '*' when ignoring the folder, '.env' when tracking it ---
     gi = root / ".devcontainer/.gitignore"
     gi_lines = [
