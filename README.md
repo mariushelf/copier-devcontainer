@@ -49,6 +49,7 @@ uvx copier update
 | `project_name` | the destination folder's name | Devcontainer display name; slugified into the Docker Compose project name. |
 | `allowed_domains` | Claude Code, GitHub, PyPI, npm, Context7, HuggingFace | The firewall allow-list. Remove entries to disallow them; add your project's APIs / mirrors / docs sites. |
 | `gitignore_devcontainer` | `true` | Whether to keep the devcontainer out of version control as per-developer setup. |
+| `install_headless_browser` | `false` | Bake a headless Chromium + its OS libraries into the image at build time, for Playwright/Puppeteer, Slidev/Marp rendering, or scraping. Built while the network is open so the runtime firewall doesn't have to allow the browser CDN. |
 
 ## What you get
 
@@ -153,13 +154,14 @@ make test-devcontainer # builds & boots the rendered container
 
 **`make test-render`** renders the defaults, the `gitignore_devcontainer=false`
 variant, a messy `project_name` (asserting the Compose name is a valid
-lowercased slug), and emptied/custom `allowed_domains` lists. For each render it
-checks that `project_name` and `allowed_domains` flow into the right files, the
-`.gitignore` matches the ignore choice, rendered shell passes `bash -n`,
-`devcontainer.json` is valid JSONC, `docker-compose.yml` is valid YAML, and no
-unrendered Jinja remains. It also runs a `copier update` round-trip. No Docker
-needed — a passing render does not prove the image builds, only that it renders
-correctly.
+lowercased slug), emptied/custom `allowed_domains` lists, and both
+`install_headless_browser` settings. For each render it checks that
+`project_name` and `allowed_domains` flow into the right files, the `.gitignore`
+matches the ignore choice, the Dockerfile's headless-browser block is present
+only when requested, rendered shell passes `bash -n`, `devcontainer.json` is
+valid JSONC, `docker-compose.yml` is valid YAML, and no unrendered Jinja
+remains. It also runs a `copier update` round-trip. No Docker needed — a passing
+render does not prove the image builds, only that it renders correctly.
 
 **`make test-devcontainer`** is the live check: it renders the template and uses
 the [devcontainer CLI](https://github.com/devcontainers/cli) to `up` the

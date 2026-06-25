@@ -88,6 +88,28 @@ ENV PATH="/home/${USERNAME}/.local/bin:${PATH}"
 
 # ── pre-commit (project dev tool, installed via uv) ─────────────────
 RUN uv tool install pre-commit
+{%- if install_headless_browser %}
+
+# ── Headless browser (gated by install_headless_browser) ────────────
+# Baked at BUILD time on purpose: the runtime firewall blocks the browser
+# download CDN, so the binary must be fetched now while the network is open
+# (same rationale as the Node install in custom-build.sh). Two steps, split by
+# privilege:
+#   * OS libraries need root → installed via `playwright install-deps` as root.
+#     Using Playwright's own deps command (not a hand-maintained apt list) keeps
+#     the package names correct across Ubuntu releases.
+#   * The browser binary installs as ${USERNAME} so it lands in that user's
+#     ~/.cache/ms-playwright, where Playwright / Slidev / Puppeteer find it.
+# Driven by the Python Playwright package through `uvx` (node-free; pypi is on
+# the firewall allowlist). Placed just before the developer hook so editing the
+# (churnier) hook does not invalidate this cached layer.
+USER root
+RUN apt-get update \
+    && uvx playwright install-deps chromium \
+    && rm -rf /var/lib/apt/lists/*
+USER ${USERNAME}
+RUN uvx playwright install chromium
+{%- endif %}
 
 # ── Developer-owned build-time hook (last layer) ───────────────────
 # custom-build.sh is where you bake project-specific tools into the image —

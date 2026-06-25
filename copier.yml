@@ -80,3 +80,13 @@ gitignore_devcontainer:
     in the host repo changes. If no, the devcontainer is committed (only .env
     stays ignored).
   default: true
+
+install_headless_browser:
+  type: bool
+  help: >-
+    Bake a headless Chromium (and its OS libraries) into the image at build
+    time? Enables in-container browser tooling — Playwright/Puppeteer, Slidev /
+    Marp slide rendering, scraping — that the runtime firewall would otherwise
+    block. The download happens at build time while the network is still open,
+    so nothing needs to reach the browser CDN at runtime.
+  default: false
