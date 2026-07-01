@@ -52,16 +52,52 @@ prefers it over any stored credential.
 
 ### Hot path — use a new token in the current session
 
-Inside the container, export the new token:
+Two options, depending on how far the new token needs to reach.
+
+**Just this shell.** Export it:
 
 ```bash
 export GH_TOKEN=<new-token>
 ```
 
-`gh` and git use the new token immediately, as does any process started from
-this shell — including Claude Code launched with `claude` from the same shell.
-The override is confined to the current shell: already-running sessions keep the
-old token, and the value is lost when the shell exits or the container restarts.
+`gh` and git use the new token immediately in this shell, and in anything
+started from it (including `claude` launched from the same shell). It does
+*not* reach other shells: one already open, or one you `dcexec`/`dczsh` into
+afterward, still inherits the old token from the container's environment. The
+export is also lost when this shell exits.
+
+**Every shell in the container.** `gh` checks the `GH_TOKEN` environment
+variable on every invocation and prefers it over any stored credential, so it
+has to be out of the way first:
+
+```bash
+unset GH_TOKEN
+```
+
+Do this in every shell that currently has it set (`gh auth status` shows
+whether a shell is still using `GH_TOKEN` as its token source) — otherwise
+that shell keeps using the old token no matter what you do next. Then
+re-authenticate `gh` itself, which writes to `gh`'s own config file rather
+than to one shell's environment, so every shell in the container reads the
+same file:
+
+```bash
+gh auth login
+```
+
+- Choose **GitHub.com**
+- Choose **HTTPS**
+- Answer **No** to "Authenticate Git with your GitHub credentials?"
+- Choose **Paste an authentication token**, then paste the new token
+
+Then point git's credential helper at it:
+
+```bash
+gh auth setup-git
+```
+
+Both commands land immediately in every shell in the container that doesn't
+have `GH_TOKEN` set — nothing to re-export per-shell, and no restart needed.
 
 ### Permanent path — replace the token for all sessions
 
