@@ -36,6 +36,7 @@ claude plugin install pyright-lsp --scope user
 claude plugin install commit-commands --scope user
 claude plugin install frontend-design --scope user
 claude plugin install swe-tools --scope user
+claude plugin install grilling --scope user
 claude plugin install memsearch --scope user
 claude plugin install ast-grep --scope user
 
