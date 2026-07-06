@@ -31,14 +31,14 @@ claude plugin marketplace add ast-grep/agent-skill --scope user
 claude plugin marketplace add zilliztech/memsearch --scope user
 
 # ── Claude Code plugins ─────────────────────────────────────────────
-claude plugin install superpowers --scope user
-claude plugin install pyright-lsp --scope user
-claude plugin install commit-commands --scope user
-claude plugin install frontend-design --scope user
-claude plugin install swe-tools --scope user
-claude plugin install grilling --scope user
-claude plugin install memsearch --scope user
-claude plugin install ast-grep --scope user
+claude plugin install superpowers@claude-plugins-official --scope user
+claude plugin install pyright-lsp@claude-plugins-official --scope user
+claude plugin install commit-commands@claude-plugins-official --scope user
+claude plugin install frontend-design@claude-plugins-official --scope user
+claude plugin install swe-tools@claude-swe-tools --scope user
+claude plugin install grilling@claude-swe-tools --scope user
+claude plugin install memsearch@memsearch-plugins --scope user
+claude plugin install ast-grep@ast-grep-marketplace --scope user
 
 # ── Claude Code MCP servers ─────────────────────────────────────────
 # context7 self-installs via `npx -y` (needs only node — no custom-build.sh entry).
