@@ -30,9 +30,13 @@ services:
       # of the image's /etc/localtime symlink) — corrupting the tz database:
       # ZoneInfo("UTC") then reports a non-zero offset. Local time comes from
       # the TZ env var set in devcontainer.json instead.
+{%- if enable_firewall %}
+    # NET_ADMIN/NET_RAW are only needed for init-firewall.sh's iptables/ipset
+    # calls; omitted entirely when enable_firewall is false.
     cap_add:
       - NET_ADMIN
       - NET_RAW
+{%- endif %}
     env_file:
       - path: .env
         required: false

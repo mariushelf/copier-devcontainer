@@ -119,8 +119,32 @@ def main() -> int:
     answers = root / ANSWERS_FILE
     c.check(answers.is_file(), f"answers file at {ANSWERS_FILE}")
 
+    # enable_firewall defaults to true when unset (mirrors copier.yml's default).
+    enable_firewall = spec.get("enable_firewall")
+    if enable_firewall is None:
+        enable_firewall = True
+
+    # --- allowed_domains is recorded in the answers file iff the firewall is on ---
+    # `allowed_domains` has `when: "{{ enable_firewall }}"` in copier.yml, so
+    # Copier hides it from the answers file whenever the firewall is off (it
+    # still resolves to its default for rendering, but isn't persisted). This
+    # means re-enabling the firewall later via `copier update` regenerates
+    # allowed_domains from copier.yml's defaults, discarding any customization
+    # made while the firewall was on — see HOWTOS.md's "Gotcha" note.
+    try:
+        answers_data = yaml.safe_load(answers.read_text()) or {}
+        has_domains_answer = "allowed_domains" in answers_data
+        c.check(
+            has_domains_answer == enable_firewall,
+            f"allowed_domains recorded in answers file == {enable_firewall}",
+            f"got {has_domains_answer} (keys: {sorted(answers_data)})",
+        )
+    except Exception as exc:  # noqa: BLE001
+        c.check(False, "answers file is valid YAML", str(exc))
+
     # --- devcontainer.json: valid JSONC, name == project_name ---
     dcj = root / ".devcontainer/devcontainer.json"
+    data: dict = {}
     try:
         data = json.loads(strip_jsonc(dcj.read_text()))
         c.check(True, "devcontainer.json is valid JSONC")
@@ -132,9 +156,19 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001 - report any parse failure as a check
         c.check(False, "devcontainer.json is valid JSONC", str(exc))
 
+    expected_post_start = (
+        "sudo /usr/local/bin/init-firewall.sh" if enable_firewall else "true"
+    )
+    c.check(
+        data.get("postStartCommand") == expected_post_start,
+        f"postStartCommand == {expected_post_start!r} (enable_firewall={enable_firewall})",
+        f"got {data.get('postStartCommand')!r}",
+    )
+
     # --- docker-compose.yml: valid YAML, name == slug(project_name) ---
     compose = root / ".devcontainer/docker-compose.yml"
     expected_slug = slugify(project_name)
+    cdata: dict = {}
     try:
         cdata = yaml.safe_load(compose.read_text())
         c.check(True, "docker-compose.yml is valid YAML")
@@ -151,6 +185,14 @@ def main() -> int:
         )
     except Exception as exc:  # noqa: BLE001
         c.check(False, "docker-compose.yml is valid YAML", str(exc))
+
+    cap_add = (cdata.get("services", {}).get("dev", {}) or {}).get("cap_add") or []
+    has_net_caps = "NET_ADMIN" in cap_add and "NET_RAW" in cap_add
+    c.check(
+        has_net_caps == enable_firewall,
+        f"NET_ADMIN/NET_RAW cap_add present == {enable_firewall}",
+        f"got cap_add={cap_add}",
+    )
 
     # --- init-firewall.sh: ALLOWED_HOSTS matches the answer ---
     fw = root / ".devcontainer/init-firewall.sh"

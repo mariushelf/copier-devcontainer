@@ -1,11 +1,11 @@
 # How-tos
 
 Step-by-step guides for the recurring devcontainer tasks: updating the firewall
-allow-list, rotating the GitHub token, and customizing the image and Claude
-plugins. Each task has two paths: the **hot path** takes effect in the running
-container; the **permanent path** survives a restart. The hot path alone is
-reverted on the next container start, so changes that must persist require the
-permanent path.
+allow-list, enabling or disabling the firewall, rotating the GitHub token, and
+customizing the image and Claude plugins. Each task has two paths: the **hot
+path** takes effect in the running container; the **permanent path** survives
+a restart. The hot path alone is reverted on the next container start, so
+changes that must persist require the permanent path.
 
 ## Updating the firewall allow-list
 
@@ -42,6 +42,42 @@ dcrebuild
 container; `postStartCommand` then applies the updated rules. A script-only
 change rebuilds in seconds because the Docker layer cache is reused. Named
 volumes (`.venv`, Claude config, shell history) are preserved.
+
+## Enabling or disabling the firewall
+
+Whether the firewall runs at all is set at copy time by the `enable_firewall`
+Copier answer (default `true`). Check the current setting in
+`.copier-answers.devcontainer.yml`. Flipping it after the fact touches two
+generated files.
+
+### Permanent path — flip the answer and update
+
+```bash
+uvx copier update --answers-file .devcontainer/.copier-answers.devcontainer.yml \
+    -d enable_firewall=true   # or false
+dcrebuild
+```
+
+> **Gotcha:** while `enable_firewall` is `false`, Copier hides the
+> `allowed_domains` answer from `.copier-answers.devcontainer.yml` (it's only
+> asked when the firewall is on). If you disable the firewall and later
+> re-enable it through this permanent path, your customized `allowed_domains`
+> list is gone — `copier update` regenerates `init-firewall.sh` from
+> `copier.yml`'s built-in defaults instead of what you had before. Pass
+> `-d allowed_domains=[...]` explicitly when you re-enable if you need your
+> old list back, or use the manual path below, which never touches the
+> answers file.
+
+### Manual path — edit the generated files directly
+
+To disable: replace `.devcontainer/devcontainer.json`'s `postStartCommand`
+with `"true"`, and remove the `cap_add: [NET_ADMIN, NET_RAW]` block from
+`.devcontainer/docker-compose.yml`. To re-enable, restore
+`"sudo /usr/local/bin/init-firewall.sh"` and the `cap_add` block. Either way,
+`dcrebuild` to recreate the container. The firewall binary and its sudoers
+grant are always baked into the image (see [Dockerfile](Dockerfile)), so
+toggling never needs an image rebuild by itself — only the recreate to pick up
+`devcontainer.json`/`docker-compose.yml`.
 
 ## Rotating the GitHub token
 
