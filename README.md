@@ -178,7 +178,7 @@ these same targets — no separate CI code path:
 - **`devcontainer`** — runs `make test-devcontainer` on PRs (and manual
   dispatch) only; its cost is why it doesn't run on every push. To block merges
   on it, mark `devcontainer` a required status check in the branch-protection
-  rule for `master`.
+  rule for `main`.
 
 ## Requirements
 
