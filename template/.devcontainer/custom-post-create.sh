@@ -45,7 +45,7 @@ claude plugin install agent-skills@addy-agent-skills --scope user
 # install rtk
 curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/master/install.sh | sh
 rtk telemetry disable
-rtk init -g
+rtk init -g --auto-patch
 
 # install graphify
 uv tool install graphifyy
