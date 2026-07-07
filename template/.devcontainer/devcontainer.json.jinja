@@ -31,7 +31,10 @@
     }
   },
 
-  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh",
+  // No-op ("true") when enable_firewall is false — the firewall binary and its
+  // sudoers grant are still baked into the image either way (see HOWTOS.md),
+  // so re-enabling later is just flipping this answer and a copier update.
+  "postStartCommand": {{ ("sudo /usr/local/bin/init-firewall.sh" if enable_firewall else "true") | tojson }},
   "postCreateCommand": "bash .devcontainer/scripts/post-create.sh",
   "waitFor": "postStartCommand"
 }

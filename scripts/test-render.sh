@@ -26,19 +26,23 @@ PY=(uv run --quiet --with pyyaml python)
 COPIER=(uvx copier)
 FAILED=0
 
-# render <out-subdir> <project_name> <allowed_domains_json|-> <gitignore> [browser|-]
+# render <out-subdir> <project_name> <allowed_domains_json|-> <gitignore> [browser|-] [firewall|-]
 # Writes a spec file and runs the checker. allowed_domains "-" means "use the
 # template defaults" (the checker resolves them from copier.yml). browser "-"
 # (the default) leaves install_headless_browser unset so the template default
 # applies; "true"/"false" force the answer and the checker asserts the
-# Dockerfile's browser block is present/absent accordingly.
+# Dockerfile's browser block is present/absent accordingly. firewall "-"
+# (the default) leaves enable_firewall unset so the template default (true)
+# applies; "true"/"false" force the answer and the checker asserts
+# postStartCommand and the docker-compose cap_add block accordingly.
 render() {
-  local sub="$1" pname="$2" domains="$3" gitignore="$4" browser="${5:--}"
+  local sub="$1" pname="$2" domains="$3" gitignore="$4" browser="${5:--}" firewall="${6:--}"
   local out="$WORK/$sub"
   echo ""
   echo "=== render: $sub ==="
   local args=(copy --defaults --trust --vcs-ref HEAD)
   [[ -n "$pname" ]] && args+=(-d "project_name=$pname")
+  [[ "$firewall" != "-" ]] && args+=(-d "enable_firewall=$firewall")
   [[ "$domains" != "-" ]] && args+=(-d "allowed_domains=$domains")
   args+=(-d "gitignore_devcontainer=$gitignore")
   [[ "$browser" != "-" ]] && args+=(-d "install_headless_browser=$browser")
@@ -48,9 +52,11 @@ render() {
   local expected_pname="${pname:-$sub}"
   local domains_field="$domains"
   [[ "$domains" == "-" ]] && domains_field="null"
-  # browser "-" -> null (don't assert the block either way for this render).
+  # browser/firewall "-" -> null (don't assert one way or the other for this render).
   local browser_field="$browser"
   [[ "$browser" == "-" ]] && browser_field="null"
+  local firewall_field="$firewall"
+  [[ "$firewall" == "-" ]] && firewall_field="null"
 
   local spec="$WORK/$sub.spec.json"
   cat >"$spec" <<JSON
@@ -61,6 +67,7 @@ render() {
   "allowed_domains": $domains_field,
   "gitignore_devcontainer": $gitignore,
   "install_headless_browser": $browser_field,
+  "enable_firewall": $firewall_field,
   "copier_yml": "$REPO_ROOT/copier.yml",
   "template_dir": "$REPO_ROOT/template"
 }
@@ -85,6 +92,15 @@ render "browser-on" "" "-" "true" "true"
 # headless browser explicitly off -> block absent (defaults already cover false,
 # but assert it explicitly so a flipped default can't pass silently)
 render "browser-off" "" "-" "true" "false"
+# firewall explicitly on -> postStartCommand runs init-firewall.sh, cap_add present
+# (defaults already cover true, but assert it explicitly, mirroring browser-on/off)
+render "firewall-on" "" "-" "true" "-" "true"
+# firewall off -> postStartCommand no-ops, NET_ADMIN/NET_RAW cap_add absent
+render "firewall-off" "" "-" "true" "-" "false"
+# firewall off + custom allowed_domains -> the domains still render into
+# init-firewall.sh (the "when" only hides the question, not the value), but
+# are NOT persisted to the answers file (that's the HOWTOS.md "Gotcha")
+render "firewall-off-custom-domains" "" '["example.com"]' "true" "-" "false"
 
 echo ""
 echo "##### Stage 2: copier update smoke test #####"

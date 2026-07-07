@@ -16,7 +16,7 @@ and scoped credentials.
 | Shell         | zsh + Oh My Zsh + Powerlevel10k + autosuggestions + syntax highlighting                                                                                                                                                                                                                                                                                                             |
 | Claude Code   | Native binary with pre-configured plugins and MCP servers                                                                                                                                                                                                                                                                                                                           |
 | GitHub CLI    | `gh`, authenticated via `GH_TOKEN` from `.env`                                                                                                                                                                                                                                                                                                                                      |
-| Firewall      | Default-deny egress via iptables + dnsmasq + ipset                                                                                                                                                                                                                                                                                                                                  |
+| Firewall      | Default-deny egress via iptables + dnsmasq + ipset (on by default, opt out with `enable_firewall: false` at copy time)                                                                                                                                                                                                                                                              |
 | Claude Skills | [superpowers](https://github.com/obra/superpowers), [design-advisor](https://github.com/mariushelf/claude-swe-tools/blob/main/swe-tools/skills/design-advisor/SKILL.md), [working-on-parallel-issues](https://github.com/mariushelf/claude-swe-tools/blob/main/swe-tools/skills/working-on-parallel-issues/SKILL.md), [memsearch](https://github.com/zilliztech/memsearch) and more |
 
 ## Intention and workflows
@@ -149,7 +149,8 @@ for each of them.
    project-specific tools — see [Customization hooks](#customization-hooks).
 
 2. **Start** (`postStartCommand`): Runs the firewall script as root via
-   sudo. This runs on every container start, not just the first time.
+   sudo. This runs on every container start, not just the first time. A no-op
+   if this project was copied with `enable_firewall: false`.
 
 3. **Create** (`postCreateCommand`): Runs once after the container is first
    created. Installs Python dependencies (`uv sync`), sets up pre-commit hooks,
@@ -181,6 +182,16 @@ collide.
 The container runs a default-deny egress firewall that only allows outbound
 connections to explicitly whitelisted domains. This is the key safety
 mechanism for running Claude Code with `--dangerously-skip-permissions`.
+
+This project was copied with the firewall **on** by default
+(`enable_firewall: true`; check
+`.copier-answers.devcontainer.yml` for the current setting). If it was copied
+with `enable_firewall: false` instead, `postStartCommand` no-ops and the
+`NET_ADMIN`/`NET_RAW` capabilities below are absent — everything past this
+point does not apply. To turn the firewall on for an existing checkout, either
+re-run Copier with `-d enable_firewall=true`, or manually restore the
+`postStartCommand` in `devcontainer.json` and the `cap_add` block in
+`docker-compose.yml`, then `dcrebuild`.
 
 **How it works:**
 

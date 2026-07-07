@@ -44,9 +44,21 @@ project_name:
     {% if not project_name %}project_name must not be empty — run copier with an
     explicit target path (e.g. "$(pwd)") or pass -d project_name=...{% endif %}
 
+enable_firewall:
+  type: bool
+  help: >-
+    Run a default-deny egress firewall in the container (iptables + dnsmasq +
+    ipset), restricting outbound traffic to the allow-list below? This is what
+    makes it safe to run Claude Code with --dangerously-skip-permissions.
+    Disable only if you understand the trade-off — e.g. the container already
+    runs on an isolated network, or Claude Code will be run without
+    --dangerously-skip-permissions.
+  default: true
+
 allowed_domains:
   type: yaml
   multiline: true
+  when: "{{ enable_firewall }}"
   help: >-
     Domains the container firewall permits outbound HTTPS to (everything else
     is denied). Remove any you don't want; add project-specific ones (APIs,

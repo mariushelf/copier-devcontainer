@@ -24,8 +24,8 @@ Apply the devcontainer to the current repository:
 uvx copier copy gh:mariushelf/copier-devcontainer "$(pwd)"
 ```
 
-Copier asks three questions (all with sensible defaults — see below), writes the
-`.devcontainer/` folder and an `.envrc`, and records your answers in
+Copier asks a handful of questions (all with sensible defaults — see below),
+writes the `.devcontainer/` folder and an `.envrc`, and records your answers in
 `.devcontainer/.copier-answers.devcontainer.yml`.
 
 > Use `"$(pwd)"` rather than `.` so the `project_name` question is pre-filled
@@ -47,7 +47,8 @@ uvx copier update
 | Question | Default | Purpose |
 |----------|---------|---------|
 | `project_name` | the destination folder's name | Devcontainer display name; slugified into the Docker Compose project name. |
-| `allowed_domains` | Claude Code, GitHub, PyPI, npm, Context7, HuggingFace | The firewall allow-list. Remove entries to disallow them; add your project's APIs / mirrors / docs sites. |
+| `enable_firewall` | `true` | Run the default-deny egress firewall. Disable only if you understand the trade-off (see [Design decisions](#design-decisions)). |
+| `allowed_domains` | Claude Code, GitHub, PyPI, npm, Context7, HuggingFace | The firewall allow-list. Only asked when `enable_firewall` is true. Remove entries to disallow them; add your project's APIs / mirrors / docs sites. |
 | `gitignore_devcontainer` | `true` | Whether to keep the devcontainer out of version control as per-developer setup. |
 | `install_headless_browser` | `false` | Bake a headless Chromium + its OS libraries into the image at build time, for Playwright/Puppeteer, Slidev/Marp rendering, or scraping. Built while the network is open so the runtime firewall doesn't have to allow the browser CDN. |
 
@@ -106,7 +107,13 @@ incidental.
 5. **Firewall allow-list is data, not code.** The allow-list is a Copier answer
    rendered into `init-firewall.sh`, pre-populated with only generic tooling
    hosts. Projects add their own domains at copy time instead of editing the
-   script.
+   script. The firewall itself defaults on (`enable_firewall: true`) but can be
+   turned off at copy time for projects that don't want it — e.g. an already
+   network-isolated host, or Claude Code run without
+   `--dangerously-skip-permissions`. Disabling it only no-ops
+   `postStartCommand` and drops the `NET_ADMIN`/`NET_RAW` capabilities; the
+   firewall script and its sudoers grant stay baked into the image, so
+   re-enabling later is just flipping the answer back.
 
 6. **Narrow templating surface.** `_templates_suffix: .jinja` means only the few
    files needing variables are rendered through Jinja; everything else is copied
