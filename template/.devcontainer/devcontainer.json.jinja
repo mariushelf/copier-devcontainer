@@ -11,6 +11,11 @@
   ],
 
   "containerEnv": {
+    // Agent teams is an experimental Claude Code feature; on by default here
+    // so every generated devcontainer gets it without a manual .env step
+    // (unlike GH_TOKEN/CONTEXT7_API_KEY, this isn't a secret, so it doesn't
+    // need to go through the gitignored .env mechanism).
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "CLAUDE_CONFIG_DIR": "/home/dev/.claude",
     "COLORTERM": "truecolor",
     "DEVCONTAINER": "true",

@@ -129,6 +129,12 @@ def main() -> int:
             'devcontainer.json "name" == project_name',
             f'got {data.get("name")!r}, expected {project_name!r}',
         )
+        container_env = data.get("containerEnv", {})
+        c.check(
+            container_env.get("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS") == "1",
+            "agent teams enabled by default (containerEnv)",
+            f"got {container_env.get('CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS')!r}, expected '1'",
+        )
     except Exception as exc:  # noqa: BLE001 - report any parse failure as a check
         c.check(False, "devcontainer.json is valid JSONC", str(exc))
 
