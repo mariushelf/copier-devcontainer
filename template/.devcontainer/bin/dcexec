@@ -5,7 +5,20 @@
 #   dcexec claude       # run a single command (e.g. claude) then exit
 set -euo pipefail
 
-root="$(git rev-parse --show-toplevel)"
+# Resolve the project root from this script's own location, not from git: the
+# launchers live at <root>/.devcontainer/bin/, so <root> is two levels up. This
+# keeps them working with no git installed and outside a git repo (fresh dir,
+# exported tarball). The loop follows symlinks by hand — `readlink` without `-f`
+# so it also works on macOS/BSD — so an install that symlinks this onto PATH
+# still resolves the real file's location.
+source="${BASH_SOURCE[0]}"
+while [ -L "$source" ]; do
+  dir="$(cd -P "$(dirname "$source")" >/dev/null 2>&1 && pwd)"
+  source="$(readlink "$source")"
+  [ "${source#/}" = "$source" ] && source="$dir/$source"
+done
+script_dir="$(cd -P "$(dirname "$source")" >/dev/null 2>&1 && pwd)"
+root="$(cd "$script_dir/../.." >/dev/null 2>&1 && pwd)"
 cd "$root"
 
 devcontainer up --workspace-folder .

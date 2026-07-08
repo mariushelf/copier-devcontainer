@@ -39,6 +39,22 @@ jobs:
       - name: make test-render
         run: make test-render
 
+  # Render the template and drive the host-side bin/ launchers with git shimmed
+  # to fail, from a non-repo CWD, asserting they resolve the project root without
+  # git. Fast and Docker-free (devcontainer/docker/git are shimmed).
+  launchers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      # uv provides `uvx copier`.
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        # No uv.lock / requirements*.txt here, so the cache key never matches;
+        # disable caching to silence the warning (nothing worth caching anyway).
+        with:
+          enable-cache: false
+      - name: make test-launchers
+        run: make test-launchers
+
   # ShellCheck every shell script — the harness sources and the rendered
   # devcontainer scripts (init-firewall.sh is templated, so it is rendered
   # first). Fast and Docker-free; catches the runtime bugs `bash -n` cannot.

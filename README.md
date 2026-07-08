@@ -148,14 +148,25 @@ incidental.
    `uv` / `claude` commands in a script you own are simpler and more transparent
    than reinventing apt/uv/npm behind a leakier interface.
 
+9. **Host-side launchers self-locate; they don't require git.** The `bin/`
+   helpers (`dcexec`, `dcrebuild`, `dcdown`, ...) resolve the project root from
+   their own path (two levels up from `.devcontainer/bin/`), resolving symlinks
+   by hand so they work when invoked directly, via the `.envrc`-added `PATH`, or
+   through a hand-rolled symlink. They deliberately do **not** shell out to
+   `git rev-parse` for the root: that made a git binary and a git working tree a
+   precondition for merely starting the container, which broke in exported
+   tarballs and non-repo checkouts. `scripts/test-launchers.sh` guards this by
+   driving each launcher with git shimmed to fail, from a non-repo directory.
+
 ## Development
 
 The template has two test suites, both driven by `make` so they run identically
 locally and in CI:
 
 ```bash
-make test              # both suites
+make test              # everything
 make test-render       # fast, no Docker
+make test-launchers    # fast, no Docker — bin/ launchers resolve the root without git
 make test-devcontainer # builds & boots the rendered container
 ```
 
