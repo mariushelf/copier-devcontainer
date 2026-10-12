@@ -99,3 +99,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: make test-devcontainer
+
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # The action lists a PR's commits through the API to scan only those.
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # No GITLEAKS_LICENSE: it is only required for organization repos.
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: "8.30.1" # Keep in step with the pre-commit hook.
+          GITLEAKS_ENABLE_COMMENTS: "false" # Comments need pull-requests: write.
